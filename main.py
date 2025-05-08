@@ -10,8 +10,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Convert video to Japanese ASCII art')
     parser.add_argument('input_path', type=str, help='Path to input video file')
     parser.add_argument('output_path', type=str, help='Path to output video file')
-    parser.add_argument('--width', type=int, default=120, help='Width of ASCII output in characters')
-    parser.add_argument('--height', type=int, default=60, help='Height of ASCII output in characters')
+    parser.add_argument('--width', type=int, default=120, help='Maximum width of ASCII output in characters (aspect ratio will be preserved)')
+    parser.add_argument('--height', type=int, default=60, help='Maximum height of ASCII output in characters (aspect ratio will be preserved)')
     parser.add_argument('--fps', type=int, default=30, help='Frames per second of output video')
     parser.add_argument('--font-size', type=int, default=12, help='Font size for ASCII characters')
     parser.add_argument('--temp-dir', type=str, default='.\\temp', help='Directory for temporary files')
@@ -43,8 +43,8 @@ def main():
         
         # Process video
         print(f"Processing video: {args.input_path}")
-        downscaled_video = video_processor.downscale_video(
-            args.input_path, 
+        downscaled_video, actual_dimensions = video_processor.downscale_video(
+            args.input_path,
             os.path.join(args.temp_dir, "downscaled.mp4"),
             args.width,
             args.height
@@ -52,7 +52,7 @@ def main():
         
         # Convert to ASCII frames
         print("Converting to ASCII art...")
-        ascii_frames = ascii_converter.convert_video_to_ascii(
+        ascii_frames, ascii_dimensions = ascii_converter.convert_video_to_ascii(
             downscaled_video,
             args.width,
             args.height
@@ -60,7 +60,7 @@ def main():
         
         # Render and save output
         print(f"Rendering output to: {args.output_path}")
-        renderer.render_ascii_frames(ascii_frames, args.output_path)
+        renderer.render_ascii_frames(ascii_frames, args.output_path, ascii_dimensions)
         
         print("Conversion complete!")
     

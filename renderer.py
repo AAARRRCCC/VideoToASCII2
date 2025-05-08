@@ -54,20 +54,26 @@ class Renderer:
         else:
             print(f"Using font: {os.path.basename(loaded_font_path)}")
     
-    def render_ascii_frames(self, ascii_frames, output_path):
+    def render_ascii_frames(self, ascii_frames, output_path, actual_dimensions=None):
         """
         Render ASCII frames to an output video.
         
         Args:
             ascii_frames (list): List of 2D ASCII frames
             output_path (str): Path to save the output video
+            actual_dimensions (tuple, optional): Actual width and height of ASCII frames
+                                               (for information purposes only)
         """
         if not ascii_frames:
             raise ValueError("No ASCII frames to render")
         
-        # Determine dimensions
+        # Determine dimensions from the actual ASCII frames
+        # (actual_dimensions parameter is for information only)
         height = len(ascii_frames[0])
         width = len(ascii_frames[0][0])
+        
+        # Log the dimensions being used
+        print(f"Rendering ASCII frames with dimensions: {width}x{height}")
         
         # Calculate output image dimensions
         char_width = self.font_size

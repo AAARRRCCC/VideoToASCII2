@@ -18,11 +18,30 @@ class ASCIIConverter:
             
         Returns:
             list: List of ASCII art frames
+            tuple: Actual dimensions (width, height) used for ASCII art
         """
         # Extract frames from video
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             raise RuntimeError(f"Could not open video file: {video_path}")
+        
+        # Get video dimensions
+        video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        # Calculate actual dimensions to use for ASCII art (preserving aspect ratio)
+        aspect_ratio = video_width / video_height
+        
+        # Use the provided width and calculate height based on aspect ratio
+        actual_width = width
+        actual_height = int(actual_width / aspect_ratio)
+        
+        # If calculated height exceeds specified height, recalculate based on height
+        if actual_height > height:
+            actual_height = height
+            actual_width = int(actual_height * aspect_ratio)
+        
+        print(f"ASCII dimensions (preserving aspect ratio): {actual_width}x{actual_height}")
         
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         ascii_frames = []
@@ -33,11 +52,11 @@ class ASCIIConverter:
                 break
             
             # Convert frame to ASCII
-            ascii_frame = self.convert_frame_to_ascii(frame, width, height)
+            ascii_frame = self.convert_frame_to_ascii(frame, actual_width, actual_height)
             ascii_frames.append(ascii_frame)
         
         cap.release()
-        return ascii_frames
+        return ascii_frames, (actual_width, actual_height)
     
     def convert_frame_to_ascii(self, frame, width, height):
         """
@@ -51,7 +70,7 @@ class ASCIIConverter:
         Returns:
             list: 2D list of ASCII characters
         """
-        # Resize frame to match target dimensions
+        # Resize frame to match target dimensions while preserving aspect ratio
         resized_frame = cv2.resize(frame, (width, height))
         
         # Convert to grayscale
