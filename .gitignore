@@ -1,2 +1,5 @@
 # Ignore all .mp4 files
 *.mp4
+/test_output/*
+/test_videos/*
+/__pycache__/*

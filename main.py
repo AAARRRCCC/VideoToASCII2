@@ -15,6 +15,8 @@ def parse_arguments():
     parser.add_argument('--fps', type=int, default=30, help='Frames per second of output video')
     parser.add_argument('--font-size', type=int, default=12, help='Font size for ASCII characters')
     parser.add_argument('--temp-dir', type=str, default='.\\temp', help='Directory for temporary files')
+    parser.add_argument('--processes', type=int, default=None, help='Number of processes to use for parallel processing (default: number of CPU cores)')
+    parser.add_argument('--batch-size', type=int, default=10, help='Number of frames to process in each batch (default: 10)')
     return parser.parse_args()
 
 def main():
@@ -37,9 +39,9 @@ def main():
     
     try:
         # Initialize components
-        video_processor = VideoProcessor()
-        ascii_converter = ASCIIConverter()
-        renderer = Renderer(font_size=args.font_size, fps=args.fps)
+        video_processor = VideoProcessor(num_processes=args.processes)
+        ascii_converter = ASCIIConverter(num_processes=args.processes)
+        renderer = Renderer(font_size=args.font_size, fps=args.fps, num_processes=args.processes)
         
         # Process video
         print(f"Processing video: {args.input_path}")
@@ -55,12 +57,18 @@ def main():
         ascii_frames, ascii_dimensions = ascii_converter.convert_video_to_ascii(
             downscaled_video,
             args.width,
-            args.height
+            args.height,
+            batch_size=args.batch_size
         )
         
         # Render and save output
         print(f"Rendering output to: {args.output_path}")
-        renderer.render_ascii_frames(ascii_frames, args.output_path, ascii_dimensions)
+        renderer.render_ascii_frames(
+            ascii_frames,
+            args.output_path,
+            ascii_dimensions,
+            batch_size=args.batch_size
+        )
         
         print("Conversion complete!")
     
