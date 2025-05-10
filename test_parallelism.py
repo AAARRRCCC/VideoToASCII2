@@ -222,6 +222,14 @@ def plot_results(results):
         batch_sizes = []
         speedups = []
         similarities = []
+        execution_times = []
+        
+        # Add sequential run data (for absolute time comparison)
+        process_counts.append(1)
+        batch_sizes.append(1)
+        speedups.append(1.0)  # By definition, speedup is 1.0 for sequential
+        similarities.append(1.0)  # By definition, similarity is 1.0 for sequential
+        execution_times.append(seq_time)
         
         for key, value in video_results.items():
             if key == "sequential":
@@ -239,14 +247,41 @@ def plot_results(results):
                         batch_sizes.append(batch_size)
                         speedups.append(batch_value["speedup"])
                         similarities.append(batch_value["similarity"])
+                        execution_times.append(batch_value["time"])
+        
+        # Create execution time vs. process count plot (absolute times)
+        plt.figure(figsize=(10, 6))
+        
+        # Add sequential run as a separate point with special marker
+        plt.plot(1, seq_time, marker='*', markersize=15, color='red', label="Sequential (Non-Parallel)")
+        
+        # Group by batch size (excluding sequential point which we already plotted)
+        unique_batch_sizes = sorted(set(batch_sizes[1:]))
+        for batch_size in unique_batch_sizes:
+            batch_indices = [i for i, b in enumerate(batch_sizes) if b == batch_size and i > 0]  # Skip sequential
+            plt.plot(
+                [process_counts[i] for i in batch_indices],
+                [execution_times[i] for i in batch_indices],
+                marker='o',
+                label=f"Batch Size: {batch_size}"
+            )
+        
+        plt.xlabel("Number of Processes")
+        plt.ylabel("Execution Time (seconds)")
+        plt.title(f"Execution Time vs. Process Count for {video_name}")
+        plt.grid(True)
+        plt.legend()
+        plt.savefig(f"test_output/plots/{video_name}_time_vs_processes.png")
         
         # Create speedup vs. process count plot
         plt.figure(figsize=(10, 6))
         
-        # Group by batch size
-        unique_batch_sizes = sorted(set(batch_sizes))
+        # Add sequential run as a reference point
+        plt.plot(1, 1.0, marker='*', markersize=15, color='red', label="Sequential (Non-Parallel)")
+        
+        # Group by batch size (excluding sequential point which we already plotted)
         for batch_size in unique_batch_sizes:
-            batch_indices = [i for i, b in enumerate(batch_sizes) if b == batch_size]
+            batch_indices = [i for i, b in enumerate(batch_sizes) if b == batch_size and i > 0]  # Skip sequential
             plt.plot(
                 [process_counts[i] for i in batch_indices],
                 [speedups[i] for i in batch_indices],
@@ -264,10 +299,13 @@ def plot_results(results):
         # Create speedup vs. batch size plot
         plt.figure(figsize=(10, 6))
         
-        # Group by process count
-        unique_process_counts = sorted(set(process_counts))
+        # Add sequential run as a reference point
+        plt.plot(1, 1.0, marker='*', markersize=15, color='red', label="Sequential (Non-Parallel)")
+        
+        # Group by process count (excluding sequential point which we already plotted)
+        unique_process_counts = sorted(set(process_counts[1:]))  # Skip sequential
         for process_count in unique_process_counts:
-            process_indices = [i for i, p in enumerate(process_counts) if p == process_count]
+            process_indices = [i for i, p in enumerate(process_counts) if p == process_count and i > 0]  # Skip sequential
             plt.plot(
                 [batch_sizes[i] for i in process_indices],
                 [speedups[i] for i in process_indices],
@@ -284,13 +322,52 @@ def plot_results(results):
         
         # Create similarity plot
         plt.figure(figsize=(10, 6))
-        plt.scatter(speedups, similarities, c=process_counts, cmap='viridis')
-        plt.colorbar(label="Number of Processes")
+        
+        # Add sequential run as a reference point
+        plt.scatter(1.0, 1.0, s=200, c='red', marker='*', label="Sequential (Non-Parallel)")
+        
+        # Plot other points (excluding sequential)
+        sc = plt.scatter(speedups[1:], similarities[1:], c=process_counts[1:], cmap='viridis')
+        plt.colorbar(sc, label="Number of Processes")
         plt.xlabel("Speedup Factor")
         plt.ylabel("Frame Similarity")
         plt.title(f"Quality vs. Performance for {video_name}")
         plt.grid(True)
+        plt.legend()
         plt.savefig(f"test_output/plots/{video_name}_quality_vs_performance.png")
+        
+        # Create a comparison bar chart of sequential vs parallel execution times
+        plt.figure(figsize=(12, 6))
+        
+        # Find the best parallel configuration
+        best_parallel_time = min(execution_times[1:])
+        best_parallel_index = execution_times.index(best_parallel_time)
+        best_parallel_config = f"P{process_counts[best_parallel_index]}, B{batch_sizes[best_parallel_index]}"
+        
+        # Create bar chart comparing sequential vs best parallel
+        labels = ['Sequential (Non-Parallel)', f'Best Parallel ({best_parallel_config})']
+        times = [seq_time, best_parallel_time]
+        speedup_text = f"{seq_time/best_parallel_time:.2f}x faster"
+        
+        bars = plt.bar(labels, times, color=['red', 'green'])
+        plt.ylabel('Execution Time (seconds)')
+        plt.title(f'Sequential vs Parallel Execution Time for {video_name}')
+        
+        # Add execution time labels on top of bars
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                    f'{height:.2f}s', ha='center', va='bottom')
+        
+        # Add speedup annotation
+        plt.annotate(speedup_text,
+                    xy=(1, best_parallel_time),
+                    xytext=(0.5, (seq_time + best_parallel_time)/2),
+                    arrowprops=dict(facecolor='black', shrink=0.05, width=1.5, headwidth=8),
+                    ha='center')
+        
+        plt.tight_layout()
+        plt.savefig(f"test_output/plots/{video_name}_sequential_vs_parallel.png")
 
 def main():
     # Parse arguments
@@ -315,12 +392,17 @@ def main():
     cpu_count = multiprocessing.cpu_count()
     print(f"Detected {cpu_count} CPU cores")
     
-    # Define process counts to test (1, 2, half of cores, all cores)
-    process_counts = [1, 2, max(2, cpu_count // 2), cpu_count]
+    # Define process counts to test (2, half of cores, all cores)
+    # Note: Process count 1 will be used for the sequential baseline
+    process_counts = [2, max(2, cpu_count // 2), cpu_count]
     process_counts = sorted(list(set(process_counts)))  # Remove duplicates
     
     # Define batch sizes to test
     batch_sizes = [1, 5, 10, 20, 50]
+    
+    print(f"Testing with process counts: {process_counts}")
+    print(f"Testing with batch sizes: {batch_sizes}")
+    print(f"Sequential baseline will use: processes=1, batch_size=1")
     
     # Run performance tests
     print("\nRunning performance tests...")
@@ -333,12 +415,14 @@ def main():
     # Print summary
     print("\nTest Summary:")
     for video_name, video_results in results.items():
+        seq_time = video_results['sequential']['time']
         print(f"\n{video_name}:")
-        print(f"  Sequential processing time: {video_results['sequential']['time']:.2f} seconds")
+        print(f"  Sequential (Non-Parallel) processing time: {seq_time:.2f} seconds")
         
         # Find best configuration
         best_speedup = 0
         best_config = None
+        best_time = float('inf')
         
         for key, value in video_results.items():
             if key == "sequential":
@@ -347,13 +431,16 @@ def main():
             for batch_key, batch_value in value.items():
                 if batch_value["speedup"] > best_speedup:
                     best_speedup = batch_value["speedup"]
+                    best_time = batch_value["time"]
                     process_count = int(key.split("_")[1])
                     batch_size = int(batch_key.split("_")[1])
                     best_config = (process_count, batch_size)
         
         if best_config:
-            print(f"  Best configuration: {best_config[0]} processes, batch size {best_config[1]}")
-            print(f"  Best speedup: {best_speedup:.2f}x")
+            print(f"  Best parallel configuration: {best_config[0]} processes, batch size {best_config[1]}")
+            print(f"  Best parallel processing time: {best_time:.2f} seconds")
+            print(f"  Speedup over sequential: {best_speedup:.2f}x")
+            print(f"  Time reduction: {(seq_time - best_time):.2f} seconds ({(seq_time - best_time)/seq_time*100:.1f}%)")
     
     print("\nDetailed results and plots saved to test_output directory")
 
