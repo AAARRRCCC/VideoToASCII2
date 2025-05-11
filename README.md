@@ -80,6 +80,7 @@ python main.py input_video.mp4 output_video.mp4 --width 160 --height 90 --fps 30
 - `--temp-dir`: Directory for temporary files (default: .\temp)
 - `--processes`: Number of processes to use for parallel processing (default: number of CPU cores)
 - `--batch-size`: Number of frames to process in each batch (default: 10)
+- `--compare`: Create a side-by-side comparison video of the original and ASCII versions
 
 ## Examples
 
@@ -124,6 +125,14 @@ python main.py my_video.mp4 memory_optimized.mp4 --processes 4 --batch-size 5
 ```
 python main.py my_video.mp4 max_performance.mp4 --processes 8 --batch-size 20
 ```
+
+### Create a side-by-side comparison video
+
+```
+python main.py my_video.mp4 ascii_output.mp4 --compare
+```
+
+This will create both the ASCII video and a side-by-side comparison video (named *_comparison.mp4) that shows the original video alongside the ASCII version.
 
 ## Troubleshooting
 

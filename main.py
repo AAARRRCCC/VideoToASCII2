@@ -17,6 +17,7 @@ def parse_arguments():
     parser.add_argument('--temp-dir', type=str, default='.\\temp', help='Directory for temporary files')
     parser.add_argument('--processes', type=int, default=None, help='Number of processes to use for parallel processing (default: number of CPU cores)')
     parser.add_argument('--batch-size', type=int, default=10, help='Number of frames to process in each batch (default: 10)')
+    parser.add_argument('--compare', action='store_true', help='Create a side-by-side comparison video of the original and ASCII versions')
     return parser.parse_args()
 
 def main():
@@ -36,6 +37,10 @@ def main():
     
     # Create temporary directory if it doesn't exist
     create_directory_if_not_exists(args.temp_dir)
+    
+    # If the output directory doesn't exist, create it
+    output_dir = os.path.dirname(os.path.abspath(args.output_path))
+    create_directory_if_not_exists(output_dir)
     
     try:
         # Initialize components
@@ -69,6 +74,17 @@ def main():
             ascii_dimensions,
             batch_size=args.batch_size
         )
+        
+        # If compare flag is set, create side-by-side comparison video
+        if args.compare:
+            print("Creating side-by-side comparison video...")
+            comparison_path = os.path.splitext(args.output_path)[0] + "_comparison.mp4"
+            video_processor.create_comparison_video(
+                args.input_path,
+                args.output_path,
+                comparison_path
+            )
+            print(f"Comparison video saved to: {comparison_path}")
         
         print("Conversion complete!")
     

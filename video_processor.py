@@ -152,3 +152,67 @@ class VideoProcessor:
         frames = [f for f in frames if f is not None]
         
         return frames, fps
+        
+    def create_comparison_video(self, input_path, ascii_path, output_path):
+        """
+        Create a side-by-side comparison video showing the original video and its ASCII version.
+        
+        Args:
+            input_path (str): Path to the original input video
+            ascii_path (str): Path to the ASCII converted video
+            output_path (str): Path to save the side-by-side comparison video
+            
+        Returns:
+            str: Path to the comparison video
+        """
+        # Ensure input files exist
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Original video file not found: {input_path}")
+        if not os.path.exists(ascii_path):
+            raise FileNotFoundError(f"ASCII video file not found: {ascii_path}")
+        
+        # Get original video dimensions
+        original_cap = cv2.VideoCapture(input_path)
+        if not original_cap.isOpened():
+            raise RuntimeError(f"Could not open video file: {input_path}")
+        original_width = int(original_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        original_height = int(original_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        original_cap.release()
+        
+        # Get ASCII video dimensions
+        ascii_cap = cv2.VideoCapture(ascii_path)
+        if not ascii_cap.isOpened():
+            raise RuntimeError(f"Could not open video file: {ascii_path}")
+        ascii_width = int(ascii_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        ascii_height = int(ascii_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        ascii_cap.release()
+        
+        print(f"Original video dimensions: {original_width}x{original_height}")
+        print(f"ASCII video dimensions: {ascii_width}x{ascii_height}")
+        
+        # Determine the target height (use the larger of the two)
+        target_height = max(original_height, ascii_height)
+        
+        # Create the side-by-side comparison with ffmpeg
+        # We resize both videos to the same height before stacking them
+        # We maintain the audio from the original video
+        
+        cmd = (
+            f'ffmpeg -i "{input_path}" -i "{ascii_path}" '
+            f'-filter_complex "'
+            f'[0:v]scale=-1:{target_height}[v0];'
+            f'[1:v]scale=-1:{target_height}[v1];'
+            f'[v0][v1]hstack=inputs=2[v]" '
+            f'-map "[v]" -map 0:a? -c:v libx264 -crf 23 -preset fast '
+            f'-c:a copy -y "{output_path}"'
+        )
+        
+        try:
+            # Use shell=True for Windows command execution
+            process = subprocess.run(cmd, check=True, stderr=subprocess.PIPE, shell=True)
+            print(f"Comparison video created successfully: {output_path}")
+        except subprocess.CalledProcessError as e:
+            error_message = e.stderr.decode() if e.stderr else str(e)
+            raise RuntimeError(f"Error creating comparison video: {error_message}")
+            
+        return output_path
