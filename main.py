@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import time
 from video_processor import VideoProcessor
 from ascii_converter import ASCIIConverter
 from renderer import Renderer
@@ -15,9 +16,10 @@ def parse_arguments():
     parser.add_argument('--fps', type=int, default=30, help='Frames per second of output video')
     parser.add_argument('--font-size', type=int, default=12, help='Font size for ASCII characters')
     parser.add_argument('--temp-dir', type=str, default='.\\temp', help='Directory for temporary files')
-    parser.add_argument('--processes', type=int, default=None, help='Number of processes to use for parallel processing (default: number of CPU cores)')
+    parser.add_argument('--processes', type=int, default=None, help='Number of processes to use when mode is set to "parallel" (default: number of CPU cores)')
     parser.add_argument('--batch-size', type=int, default=10, help='Number of frames to process in each batch (default: 10)')
     parser.add_argument('--compare', action='store_true', help='Create a side-by-side comparison video of the original and ASCII versions')
+    parser.add_argument('--mode', type=str, choices=['sequential', 'parallel'], default='parallel', help='Processing mode: "sequential" or "parallel" (default: "parallel")')
     return parser.parse_args()
 
 def main():
@@ -43,48 +45,67 @@ def main():
     create_directory_if_not_exists(output_dir)
     
     try:
-        # Initialize components
-        video_processor = VideoProcessor(num_processes=args.processes)
-        ascii_converter = ASCIIConverter(num_processes=args.processes)
-        renderer = Renderer(font_size=args.font_size, fps=args.fps, num_processes=args.processes)
+        # Initialize components based on processing mode
+        if args.mode == 'sequential':
+            print("Using sequential processing mode.")
+            # In sequential mode, num_processes is effectively 1
+            video_processor = VideoProcessor(num_processes=1)
+            ascii_converter = ASCIIConverter(num_processes=1)
+            renderer = Renderer(font_size=args.font_size, fps=args.fps, num_processes=1)
+        else: # Default to parallel
+            print("Using parallel processing mode.")
+            video_processor = VideoProcessor(num_processes=args.processes)
+            ascii_converter = ASCIIConverter(num_processes=args.processes)
+            renderer = Renderer(font_size=args.font_size, fps=args.fps, num_processes=args.processes)
         
         # Process video
         print(f"Processing video: {args.input_path}")
+        start_time = time.time()
         downscaled_video, actual_dimensions = video_processor.downscale_video(
             args.input_path,
             os.path.join(args.temp_dir, "downscaled.mp4"),
             args.width,
             args.height
         )
+        end_time = time.time()
+        print(f"Downscaling video took: {end_time - start_time:.2f} seconds")
         
         # Convert to ASCII frames
         print("Converting to ASCII art...")
+        start_time = time.time()
         ascii_frames, ascii_dimensions = ascii_converter.convert_video_to_ascii(
             downscaled_video,
             args.width,
             args.height,
             batch_size=args.batch_size
         )
+        end_time = time.time()
+        print(f"Converting to ASCII art took: {end_time - start_time:.2f} seconds")
         
         # Render and save output
         print(f"Rendering output to: {args.output_path}")
+        start_time = time.time()
         renderer.render_ascii_frames(
             ascii_frames,
             args.output_path,
             ascii_dimensions,
             batch_size=args.batch_size
         )
+        end_time = time.time()
+        print(f"Rendering output took: {end_time - start_time:.2f} seconds")
         
         # If compare flag is set, create side-by-side comparison video
         if args.compare:
             print("Creating side-by-side comparison video...")
+            start_time = time.time()
             comparison_path = os.path.splitext(args.output_path)[0] + "_comparison.mp4"
             video_processor.create_comparison_video(
                 args.input_path,
                 args.output_path,
                 comparison_path
             )
-            print(f"Comparison video saved to: {comparison_path}")
+            end_time = time.time()
+            print(f"Creating comparison video took: {end_time - start_time:.2f} seconds")
         
         print("Conversion complete!")
     

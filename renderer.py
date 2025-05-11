@@ -5,6 +5,44 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
+# Global variable in each worker process to store the font
+_worker_font = None
+_worker_font_size = None
+
+def _worker_init(font_size):
+    """Initializer function for worker processes."""
+    global _worker_font, _worker_font_size
+    _worker_font_size = font_size
+    # Load font (need to load it here since we can't pickle the font object)
+    font = None
+    # List of Japanese fonts to try on Windows, in order of preference
+    font_paths = [
+        "C:\\Windows\\Fonts\\msgothic.ttc",   # MS Gothic (common Japanese font on Windows)
+        "C:\\Windows\\Fonts\\YuGothR.ttc",    # Yu Gothic Regular
+        "C:\\Windows\\Fonts\\meiryo.ttc",     # Meiryo
+        "C:\\Windows\\Fonts\\meiryob.ttc",    # Meiryo Bold
+        "C:\\Windows\\Fonts\\msmincho.ttc",   # MS Mincho
+        "C:\\Windows\\Fonts\\yugothib.ttf",   # Yu Gothic Bold
+        "C:\\Windows\\Fonts\\malgun.ttf"      # Malgun Gothic (Korean, but has some Japanese support)
+    ]
+
+    # Try to load each font until one succeeds
+    for path in font_paths:
+        if os.path.exists(path):
+            try:
+                font = ImageFont.truetype(path, font_size)
+                break
+            except IOError:
+                continue
+
+    # If no font was loaded, try to use a default font
+    if font is None:
+        try:
+            font = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", font_size)
+        except IOError:
+            font = ImageFont.load_default()
+
+    _worker_font = font
 
 class Renderer:
     def __init__(self, font_size=12, fps=30, num_processes=None):
@@ -94,19 +132,23 @@ class Renderer:
             # Prepare frame rendering tasks
             frame_paths = []
             render_tasks = []
-            
+
             for i, ascii_frame in enumerate(ascii_frames):
                 frame_path = os.path.join(temp_dir, f"frame_{i:06d}.png")
                 frame_paths.append(frame_path)
-                render_tasks.append((ascii_frame, frame_path, img_width, img_height, self.font_size))
-            
+                # Removed font_size from task tuple
+                render_tasks.append((ascii_frame, frame_path, img_width, img_height))
+
             # Render frames in parallel using ProcessPoolExecutor
-            with ProcessPoolExecutor(max_workers=self.num_processes) as executor:
+            # Pass initializer and initargs
+            with ProcessPoolExecutor(max_workers=self.num_processes,
+                                     initializer=_worker_init,
+                                     initargs=(self.font_size,)) as executor: # Pass font_size to initializer
                 # Process frames in batches to manage memory
                 for batch_start in tqdm(range(0, len(render_tasks), batch_size), desc="Rendering frame batches"):
                     batch_end = min(batch_start + batch_size, len(render_tasks))
                     batch_tasks = render_tasks[batch_start:batch_end]
-                    
+
                     # Submit batch for parallel processing
                     futures = [
                         executor.submit(
@@ -114,18 +156,18 @@ class Renderer:
                             task[0],  # ascii_frame
                             task[1],  # frame_path
                             task[2],  # img_width
-                            task[3],  # img_height
-                            task[4]   # font_size
+                            task[3]   # img_height
+                            # Removed font_size argument
                         ) for task in batch_tasks
                     ]
-                    
+
                     # Wait for all futures to complete
                     for future in futures:
                         try:
                             future.result()
                         except Exception as e:
                             print(f"Error rendering frame: {e}")
-            
+
             # Use OpenCV to create the video
             self._create_video_from_frames(frame_paths, output_path, img_width, img_height)
         finally:
@@ -199,60 +241,35 @@ class Renderer:
 
 
 # Static method for parallel processing
-def render_ascii_frame_to_image_static(ascii_frame, output_path, img_width, img_height, font_size):
+def render_ascii_frame_to_image_static(ascii_frame, output_path, img_width, img_height):
     """
     Static method to render a single ASCII frame to an image.
     This is used for parallel processing since instance methods can't be pickled.
-    
+    Uses the font loaded in the worker initializer.
+
     Args:
         ascii_frame (list): 2D list of ASCII characters
         output_path (str): Path to save the rendered image
         img_width (int): Width of the output image
         img_height (int): Height of the output image
-        font_size (int): Font size for ASCII characters
+        # Removed font_size as it's now in the global _worker_font_size
     """
+    global _worker_font, _worker_font_size
+
     # Create a black image
     image = Image.new("RGB", (img_width, img_height), color="black")
     draw = ImageDraw.Draw(image)
-    
-    # Load font (need to load it here since we can't pickle the font object)
-    font_paths = [
-        "C:\\Windows\\Fonts\\msgothic.ttc",
-        "C:\\Windows\\Fonts\\YuGothR.ttc",
-        "C:\\Windows\\Fonts\\meiryo.ttc",
-        "C:\\Windows\\Fonts\\meiryob.ttc",
-        "C:\\Windows\\Fonts\\msmincho.ttc",
-        "C:\\Windows\\Fonts\\yugothib.ttf",
-        "C:\\Windows\\Fonts\\malgun.ttf"
-    ]
-    
-    # Try to load each font until one succeeds
-    font = None
-    for font_path in font_paths:
-        if os.path.exists(font_path):
-            try:
-                font = ImageFont.truetype(font_path, font_size)
-                break
-            except IOError:
-                continue
-    
-    # If no font was loaded, try to use a default font
-    if font is None:
-        try:
-            font = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", font_size)
-        except IOError:
-            font = ImageFont.load_default()
-    
+
     # Draw each character
     for y, row in enumerate(ascii_frame):
         for x, char in enumerate(row):
             # Draw white character on black background
             draw.text(
-                (x * font_size, y * font_size),
+                (x * _worker_font_size, y * _worker_font_size), # Use global font size
                 char,
-                font=font,
+                font=_worker_font, # Use global font
                 fill="white"
             )
-    
+
     # Save the image
     image.save(output_path)

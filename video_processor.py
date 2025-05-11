@@ -65,7 +65,7 @@ class VideoProcessor:
         cmd = (
             f'ffmpeg -i "{input_path}" '
             f'-vf "scale={new_width}:{new_height}" '
-            f'-c:v libx264 -crf 23 -preset fast -y "{output_path}"'
+            f'-c:v libx264 -crf 23 -preset fast -threads 0 -y "{output_path}"'
         )
         
         # Execute ffmpeg command
@@ -203,7 +203,7 @@ class VideoProcessor:
             f'[0:v]scale=-1:{target_height}[v0];'
             f'[1:v]scale=-1:{target_height}[v1];'
             f'[v0][v1]hstack=inputs=2[v]" '
-            f'-map "[v]" -map 0:a? -c:v libx264 -crf 23 -preset fast '
+            f'-map "[v]" -map 0:a? -c:v libx264 -crf 23 -preset fast -threads 0 '
             f'-c:a copy -y "{output_path}"'
         )
         
