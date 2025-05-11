@@ -20,6 +20,7 @@ def parse_arguments():
     parser.add_argument('--batch-size', type=int, default=10, help='Number of frames to process in each batch (default: 10)')
     parser.add_argument('--compare', action='store_true', help='Create a side-by-side comparison video of the original and ASCII versions')
     parser.add_argument('--mode', type=str, choices=['sequential', 'parallel'], default='parallel', help='Processing mode: "sequential" or "parallel" (default: "parallel")')
+    parser.add_argument('--scale', type=int, default=1, help='Scaling factor for ASCII render resolution (default: 1)')
     parser.add_argument('--profile', action='store_true', help='Enable performance profiling')
     return parser.parse_args()
 
@@ -90,8 +91,8 @@ def main():
         start_time = time.time()
         ascii_frames, ascii_dimensions = ascii_converter.convert_video_to_ascii(
             downscaled_video,
-            args.width,
-            args.height,
+            args.width * args.scale,
+            args.height * args.scale,
             batch_size=args.batch_size
         )
         end_time = time.time()
@@ -111,7 +112,7 @@ def main():
         renderer.render_ascii_frames(
             ascii_frames,
             args.output_path,
-            ascii_dimensions,
+            ascii_dimensions, # ascii_dimensions already reflects the scaled size
             batch_size=args.batch_size
         )
         end_time = time.time()
@@ -133,7 +134,8 @@ def main():
             video_processor.create_comparison_video(
                 args.input_path,
                 args.output_path,
-                comparison_path
+                comparison_path,
+                args.scale
             )
             end_time = time.time()
             print(f"Creating comparison video took: {end_time - start_time:.2f} seconds")

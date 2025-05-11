@@ -58,8 +58,14 @@ class VideoProcessor:
             new_height = height
             new_width = int(new_height * original_aspect)
         
+        # Ensure dimensions are divisible by 2 for ffmpeg compatibility
+        if new_width % 2 != 0:
+            new_width -= 1
+        if new_height % 2 != 0:
+            new_height -= 1
+            
         print(f"Original dimensions: {original_width}x{original_height}")
-        print(f"New dimensions (preserving aspect ratio): {new_width}x{new_height}")
+        print(f"New dimensions (preserving aspect ratio, adjusted for ffmpeg): {new_width}x{new_height}")
         
         # Create ffmpeg command for downscaling with Windows-safe quoting
         cmd = (
@@ -153,7 +159,7 @@ class VideoProcessor:
         
         return frames, fps
         
-    def create_comparison_video(self, input_path, ascii_path, output_path):
+    def create_comparison_video(self, input_path, ascii_path, output_path, scale_factor):
         """
         Create a side-by-side comparison video showing the original video and its ASCII version.
         
@@ -161,6 +167,7 @@ class VideoProcessor:
             input_path (str): Path to the original input video
             ascii_path (str): Path to the ASCII converted video
             output_path (str): Path to save the side-by-side comparison video
+            scale_factor (int): The scaling factor used for the ASCII video
             
         Returns:
             str: Path to the comparison video
@@ -179,7 +186,7 @@ class VideoProcessor:
         original_height = int(original_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         original_cap.release()
         
-        # Get ASCII video dimensions
+        # Get ASCII video dimensions (for logging/info purposes)
         ascii_cap = cv2.VideoCapture(ascii_path)
         if not ascii_cap.isOpened():
             raise RuntimeError(f"Could not open video file: {ascii_path}")
@@ -190,18 +197,26 @@ class VideoProcessor:
         print(f"Original video dimensions: {original_width}x{original_height}")
         print(f"ASCII video dimensions: {ascii_width}x{ascii_height}")
         
-        # Determine the target height (use the larger of the two)
-        target_height = max(original_height, ascii_height)
+        # Calculate target dimensions for comparison based on original video and scale factor
+        target_height = original_height * scale_factor
+        original_aspect = original_width / original_height
+        target_width = int(target_height * original_aspect)
+        
+        # Ensure target width is divisible by 2
+        if target_width % 2 != 0:
+            target_width -= 1
+            
+        print(f"Target dimensions for comparison videos: {target_width}x{target_height}")
         
         # Create the side-by-side comparison with ffmpeg
-        # We resize both videos to the same height before stacking them
+        # We resize both videos to the calculated target dimensions before stacking them
         # We maintain the audio from the original video
         
         cmd = (
             f'ffmpeg -i "{input_path}" -i "{ascii_path}" '
             f'-filter_complex "'
-            f'[0:v]scale=-1:{target_height}[v0];'
-            f'[1:v]scale=-1:{target_height}[v1];'
+            f'[0:v]scale={target_width}:{target_height}[v0];'
+            f'[1:v]scale={target_width}:{target_height}[v1];'
             f'[v0][v1]hstack=inputs=2[v]" '
             f'-map "[v]" -map 0:a? -c:v libx264 -crf 23 -preset fast -threads 0 '
             f'-c:a copy -y "{output_path}"'
@@ -216,3 +231,4 @@ class VideoProcessor:
             raise RuntimeError(f"Error creating comparison video: {error_message}")
             
         return output_path
+        
