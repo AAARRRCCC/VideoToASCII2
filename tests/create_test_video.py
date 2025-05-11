@@ -1,6 +1,10 @@
 import cv2
 import numpy as np
 import os
+import sys
+
+# Add the project root to the path so we can import our modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def create_test_video(output_path, width=640, height=480, duration=5, fps=30):
     """

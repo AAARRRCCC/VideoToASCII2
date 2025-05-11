@@ -3,7 +3,7 @@ import cv2
 import os
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
-from character_mapper import CharacterMapper
+from .character_mapper import CharacterMapper
 from tqdm import tqdm
 
 class ASCIIConverter:

@@ -12,6 +12,44 @@ This application takes input videos and transforms them into ASCII art animation
 4. Rendering the output at 30fps (or user-specified FPS)
 5. Utilizing parallel processing for faster conversion (up to 2.5x speedup)
 
+## Project Structure
+
+The project has been reorganized with a cleaner structure:
+
+```
+VideoToASCII/
+├── src/
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── video_processor.py
+│   │   ├── ascii_converter.py
+│   │   ├── character_mapper.py
+│   │   └── renderer.py
+│   ├── processors/
+│   │   ├── __init__.py
+│   │   ├── simple_processor.py
+│   │   ├── optimized_processor.py
+│   │   ├── parallel_processor.py
+│   │   └── enhanced_parallel_processor.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── helpers.py
+│   └── gui/
+│       ├── __init__.py
+│       └── gui.py
+├── tests/
+│   └── __init__.py
+├── main.py
+└── README.md
+```
+
+The codebase now features:
+- A central `main.py` entry point with unified command-line interface
+- Core components organized in the `src/core/` directory
+- Multiple processing implementations in the `src/processors/` directory
+- Utility functions in the `src/utils/` directory
+- GUI components in the `src/gui/` directory
+
 ## System Requirements
 
 - Windows 10 or 11
@@ -59,70 +97,111 @@ This application takes input videos and transforms them into ASCII art animation
 
 ### Basic Usage
 
-```
+```bash
+# Basic usage with default (optimized) implementation
 python main.py input_video.mp4 output_video.mp4
+```
+
+### Implementation Selection
+
+```bash
+# Select a specific implementation
+python main.py input_video.mp4 --implementation simple
+python main.py input_video.mp4 output_video.mp4 --implementation parallel
+python main.py input_video.mp4 output_video.mp4 --implementation enhanced
 ```
 
 ### Advanced Options
 
+```bash
+# Customize output
+python main.py input_video.mp4 output_video.mp4 --width 160 --height 90 --fps 30 --font-size 14 --temp-dir ./temp_folder --processes 4 --batch-size 20
 ```
-python main.py input_video.mp4 output_video.mp4 --width 160 --height 90 --fps 30 --font-size 14 --temp-dir .\temp_folder --processes 4 --batch-size 20
+
+### GUI Mode
+
+```bash
+# Launch the GUI
+python main.py --gui
 ```
 
 ### Parameters
 
-- `input_path`: Path to the input video file (required)
-- `output_path`: Path to save the output video (required)
-- `--width`: Width of the ASCII output in characters (default: 120)
-- `--height`: Height of the ASCII output in characters (default: 60)
-- `--fps`: Frames per second of the output video (default: 30)
-- `--font-size`: Font size for ASCII characters (default: 12)
-- `--temp-dir`: Directory for temporary files (default: .\temp)
-- `--processes`: Number of processes to use for parallel processing (default: number of CPU cores)
-- `--batch-size`: Number of frames to process in each batch (default: 10)
+- `input_path`: Path to the input video file (required, except in GUI mode)
+- `output_path`: Path to save the output video (optional, if not provided and not in GUI mode, display in terminal)
+- `--width`, `-w`: Width of the ASCII output in characters (default: 120)
+- `--height`, `-ht`: Height of the ASCII output in characters (default: 60)
+- `--fps`, `-f`: Frames per second of the output video (defaults to input video FPS)
+- `--font-size`, `-fs`: Font size for ASCII characters (default: 12)
+- `--temp-dir`, `-t`: Directory for temporary files (default: ./temp)
+- `--processes`, `-p`: Number of processes to use for parallel processing (default: number of CPU cores)
+- `--batch-size`, `-b`: Number of frames to process in each batch (default: 10)
+- `--implementation`, `-i`: Processing implementation to use (choices: simple, parallel, enhanced, optimized; default: optimized)
+- `--scale`, `-s`: Scale factor for output resolution (default: 1.0)
+- `--gui`, `-g`: Launch the graphical user interface
+- `--invert`, `-inv`: Invert brightness (only for terminal output)
+- `--colored`, `-c`: Use colored ASCII (only for terminal output)
 
 ## Examples
 
-### Convert a video with default settings
+### Convert a video with default settings (optimized implementation)
 
-```
+```bash
 python main.py my_video.mp4 ascii_output.mp4
+```
+
+### Use the simple implementation (good for terminal output)
+
+```bash
+python main.py my_video.mp4 --implementation simple
+```
+
+### Use the parallel implementation
+
+```bash
+python main.py my_video.mp4 ascii_output.mp4 --implementation parallel
 ```
 
 ### Create a higher resolution ASCII video
 
-```
+```bash
 python main.py my_video.mp4 high_res_ascii.mp4 --width 200 --height 100 --font-size 8
 ```
 
 ### Create a slower playback ASCII video
 
-```
+```bash
 python main.py my_video.mp4 slow_ascii.mp4 --fps 15
 ```
 
 ### Optimize for performance on a quad-core system
 
-```
+```bash
 python main.py my_video.mp4 optimized_ascii.mp4 --processes 4 --batch-size 10
 ```
 
 ### Process a large video with optimal settings
 
-```
+```bash
 python main.py large_video.mp4 large_ascii.mp4 --processes 8 --batch-size 50
 ```
 
 ### Process on a system with limited memory
 
-```
+```bash
 python main.py my_video.mp4 memory_optimized.mp4 --processes 4 --batch-size 5
 ```
 
 ### Maximum performance on a high-end system (16 cores)
 
-```
+```bash
 python main.py my_video.mp4 max_performance.mp4 --processes 8 --batch-size 20
+```
+
+### Launch the GUI for interactive usage
+
+```bash
+python main.py --gui
 ```
 
 ## Troubleshooting
@@ -203,24 +282,46 @@ Based on extensive testing, here are the recommended configurations for differen
 
 ## Technical Implementation Details
 
-For developers interested in understanding or extending the code, here's how parallelism is implemented in the VideoToASCII converter:
+For developers interested in understanding or extending the code, here's how the VideoToASCII converter is implemented:
+
+### Project Architecture
+
+The application is organized into several modules:
+
+1. **Core Components (`src/core/`)**:
+   - **Video Processor (`video_processor.py`)**: Handles video frame extraction
+   - **ASCII Converter (`ascii_converter.py`)**: Converts frames to ASCII art
+   - **Character Mapper (`character_mapper.py`)**: Maps pixel brightness to characters
+   - **Renderer (`renderer.py`)**: Renders ASCII frames to images
+
+2. **Processing Implementations (`src/processors/`)**:
+   - **Simple Processor (`simple_processor.py`)**: Basic sequential implementation
+   - **Parallel Processor (`parallel_processor.py`)**: Pipeline parallelism implementation
+   - **Enhanced Parallel Processor (`enhanced_parallel_processor.py`)**: Advanced parallel implementation
+   - **Optimized Processor (`optimized_processor.py`)**: Performance-optimized implementation
+
+3. **Utilities (`src/utils/`)**:
+   - **Helpers (`helpers.py`)**: Utility functions for file operations, ffmpeg checks, etc.
+
+4. **GUI (`src/gui/`)**:
+   - **GUI (`gui.py`)**: Graphical user interface for the application
 
 ### Parallel Processing Architecture
 
 The application uses Python's `multiprocessing` library with `ProcessPoolExecutor` to implement parallelism across multiple components:
 
-1. **Video Processor (`video_processor.py`)**:
+1. **Video Processor (`src/core/video_processor.py`)**:
    - Implements parallel frame extraction using process pools
    - Divides frame extraction tasks into batches for efficient memory management
    - Maintains frame order using pre-allocated result lists
 
-2. **ASCII Converter (`ascii_converter.py`)**:
+2. **ASCII Converter (`src/core/ascii_converter.py`)**:
    - Converts video frames to ASCII art in parallel
    - Uses batch processing to manage memory efficiently
    - Implements NumPy vectorization for pixel processing
    - Preserves frame order using indexed results
 
-3. **Renderer (`renderer.py`)**:
+3. **Renderer (`src/core/renderer.py`)**:
    - Renders ASCII frames to images in parallel
    - Uses a static rendering method for pickle compatibility
    - Processes frames in batches to manage memory usage

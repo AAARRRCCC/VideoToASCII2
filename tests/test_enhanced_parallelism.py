@@ -1,14 +1,19 @@
 import os
 import time
 import subprocess
+import psutil
+import argparse
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
+import cv2
+import shutil
+from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 import pandas as pd
 import seaborn as sns
-from datetime import datetime
 
-def run_implementation(implementation, input_video, output_video, processes=None, batch_size=10, width=120, height=60, timeout=300):
+def run_implementation(implementation, input_video, output_video, processes, batch_size, width=120, height=60):
     """
     Run a specific implementation of the video to ASCII conversion with specified parameters and measure execution time.
     
@@ -20,10 +25,10 @@ def run_implementation(implementation, input_video, output_video, processes=None
         batch_size (int): Batch size for processing
         width (int): Width of ASCII output
         height (int): Height of ASCII output
-        timeout (int): Maximum time to wait for implementation to complete (in seconds)
         
     Returns:
         float: Execution time in seconds
+        dict: Resource usage statistics
     """
     # Determine which script to run
     if implementation == 'original':
@@ -39,8 +44,8 @@ def run_implementation(implementation, input_video, output_video, processes=None
 import argparse
 import os
 import sys
-from enhanced_parallel_processor import process_video_enhanced
-from utils import check_ffmpeg_installed, create_directory_if_not_exists
+from src.processors.enhanced_parallel_processor import EnhancedParallelProcessor
+from src.utils.utils import check_ffmpeg_installed, create_directory_if_not_exists
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Convert video to ASCII art using enhanced parallelism')
@@ -76,15 +81,16 @@ def main():
     try:
         # Process video using enhanced parallelism
         print(f"Processing video with enhanced parallelism: {args.input_path}")
-        process_video_enhanced(
-            input_path=args.input_path,
+        processor = EnhancedParallelProcessor()
+        processor.process_video(
+            video_path=args.input_path,
             output_path=args.output_path,
             width=args.width,
             height=args.height,
             processes=args.processes,
             batch_size=args.batch_size,
             font_size=args.font_size,
-            fps=args.fps,
+            fps_target=args.fps,
             temp_dir=args.temp_dir
         )
         
@@ -116,140 +122,123 @@ if __name__ == "__main__":
         "python", script,
         input_video, output_video,
         "--width", str(width),
-        "--height", str(height)
+        "--height", str(height),
+        "--processes", str(processes),
+        "--batch-size", str(batch_size)
     ]
     
-    if processes is not None:
-        cmd.extend(["--processes", str(processes)])
-    
-    if batch_size is not None:
-        cmd.extend(["--batch-size", str(batch_size)])
-    
-    print(f"Running command: {' '.join(cmd)}")
+    # Start monitoring resources
+    process = psutil.Process(os.getpid())
+    initial_memory = process.memory_info().rss / 1024 / 1024  # MB
+    initial_cpu_percent = process.cpu_percent(interval=0.1)
     
     # Record start time
     start_time = time.time()
     
-    try:
-        # Run the command with timeout
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        
-        # Record end time
-        end_time = time.time()
-        
-        # Calculate execution time
-        execution_time = end_time - start_time
-        
-        # Print any errors
-        if result.returncode != 0:
-            print(f"Error running {implementation} implementation:")
-            print(result.stderr)
-        
-        return execution_time
+    # Run the command
+    result = subprocess.run(cmd, capture_output=True, text=True)
     
-    except subprocess.TimeoutExpired:
-        print(f"\n*** TIMEOUT: {implementation} implementation took longer than {timeout} seconds ***")
-        print("Terminating process and continuing with next test...")
-        
-        # Return a placeholder value
-        return float('inf')
+    # Record end time
+    end_time = time.time()
+    
+    # Calculate execution time
+    execution_time = end_time - start_time
+    
+    # Get final resource usage
+    final_memory = process.memory_info().rss / 1024 / 1024  # MB
+    final_cpu_percent = process.cpu_percent(interval=0.1)
+    memory_increase = final_memory - initial_memory
+    
+    # Collect resource statistics
+    resource_stats = {
+        "memory_increase_mb": memory_increase,
+        "cpu_percent": final_cpu_percent,
+        "exit_code": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr
+    }
+    
+    return execution_time, resource_stats
 
-def run_comparison(input_video, output_dir, process_counts, batch_sizes):
+def compare_implementations(test_videos, process_counts, batch_sizes):
     """
-    Run a comparison of all implementations with different configurations.
+    Compare all implementations with different configurations.
     
     Args:
-        input_video (str): Path to input video
-        output_dir (str): Directory to save output videos and graphs
+        test_videos (list): List of test video paths
         process_counts (list): List of process counts to test
         batch_sizes (list): List of batch sizes to test
-    
+        
     Returns:
-        dict: Results of the comparison
+        dict: Test results
     """
-    # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Create subdirectories for each implementation
-    for impl in ['original', 'parallel', 'optimized', 'enhanced']:
-        os.makedirs(os.path.join(output_dir, impl), exist_ok=True)
-    
-    # Create a directory for plots
-    plots_dir = os.path.join(output_dir, 'plots')
-    os.makedirs(plots_dir, exist_ok=True)
-    
-    # Store results
     results = {}
     
-    # Get video name
-    video_name = os.path.basename(input_video).split('.')[0]
-    results[video_name] = {}
+    # Create output directories
+    os.makedirs("test_output", exist_ok=True)
+    os.makedirs("test_output/original", exist_ok=True)
+    os.makedirs("test_output/parallel", exist_ok=True)
+    os.makedirs("test_output/optimized", exist_ok=True)
+    os.makedirs("test_output/enhanced", exist_ok=True)
     
     implementations = ['original', 'parallel', 'optimized', 'enhanced']
     
-    for implementation in implementations:
-        results[video_name][implementation] = {}
-    
-    # Test different process counts
-    for processes in process_counts:
-        for implementation in implementations:
-            results[video_name][implementation][f"processes_{processes}"] = {}
+    for video_path in test_videos:
+        video_name = os.path.basename(video_path).split('.')[0]
+        results[video_name] = {}
         
-        for batch_size in batch_sizes:
-            test_name = f"p{processes}_b{batch_size}"
-            
+        for implementation in implementations:
+            results[video_name][implementation] = {}
+        
+        # Test different process counts
+        for processes in process_counts:
             for implementation in implementations:
-                output_path = os.path.join(output_dir, implementation, f"{video_name}_{test_name}.mp4")
-                print(f"\nProcessing {video_name} with {implementation} implementation (processes={processes}, batch_size={batch_size})...")
+                results[video_name][implementation][f"processes_{processes}"] = {}
+            
+            for batch_size in batch_sizes:
+                test_name = f"p{processes}_b{batch_size}"
                 
-                # Use a shorter timeout for testing
-                exec_time = run_implementation(
-                    implementation, input_video, output_path, processes, batch_size,
-                    timeout=180  # 3 minutes timeout
-                )
-                
-                results[video_name][implementation][f"processes_{processes}"][f"batch_{batch_size}"] = {
-                    "time": exec_time
-                }
-                
-                if exec_time == float('inf'):
-                    print(f"{implementation.capitalize()} implementation: TIMEOUT")
-                else:
+                for implementation in implementations:
+                    output_path = f"test_output/{implementation}/{video_name}_{test_name}.mp4"
+                    print(f"\nProcessing {video_name} with {implementation} implementation (processes={processes}, batch_size={batch_size})...")
+                    
+                    exec_time, stats = run_implementation(
+                        implementation, video_path, output_path, processes, batch_size
+                    )
+                    
+                    results[video_name][implementation][f"processes_{processes}"][f"batch_{batch_size}"] = {
+                        "time": exec_time,
+                        "stats": stats
+                    }
+                    
                     print(f"{implementation.capitalize()} implementation time: {exec_time:.2f} seconds")
     
     # Calculate speedups relative to original implementation
-    for processes in process_counts:
-        for batch_size in batch_sizes:
-            proc_key = f"processes_{processes}"
-            batch_key = f"batch_{batch_size}"
-            
-            # Get original time
-            original_time = results[video_name]['original'][proc_key][batch_key]['time']
-            
-            # Calculate speedups for other implementations
-            for implementation in ['parallel', 'optimized', 'enhanced']:
-                impl_time = results[video_name][implementation][proc_key][batch_key]['time']
+    for video_name in results:
+        for processes in process_counts:
+            for batch_size in batch_sizes:
+                proc_key = f"processes_{processes}"
+                batch_key = f"batch_{batch_size}"
                 
-                # Skip timeout cases
-                if impl_time == float('inf'):
-                    results[video_name][implementation][proc_key][batch_key]['speedup'] = 0
-                    continue
+                # Get original time
+                original_time = results[video_name]['original'][proc_key][batch_key]['time']
                 
-                speedup = original_time / impl_time if impl_time > 0 else 0
-                results[video_name][implementation][proc_key][batch_key]['speedup'] = speedup
+                # Calculate speedups for other implementations
+                for implementation in ['parallel', 'optimized', 'enhanced']:
+                    impl_time = results[video_name][implementation][proc_key][batch_key]['time']
+                    speedup = original_time / impl_time if impl_time > 0 else 0
+                    results[video_name][implementation][proc_key][batch_key]['speedup'] = speedup
     
     return results
 
-def plot_results(results, output_dir):
+def plot_comparison_results(results):
     """
-    Plot the results of the comparison.
+    Plot comparison results between all implementations.
     
     Args:
-        results (dict): Results of the comparison
-        output_dir (str): Directory to save plots
+        results (dict): Test results
     """
-    plots_dir = os.path.join(output_dir, 'plots')
-    os.makedirs(plots_dir, exist_ok=True)
+    os.makedirs("test_output/plots", exist_ok=True)
     
     for video_name, video_results in results.items():
         # Prepare data for plotting
@@ -276,12 +265,6 @@ def plot_results(results, output_dir):
                         parallel_time = video_results["parallel"][proc_key][batch_key]["time"]
                         optimized_time = video_results["optimized"][proc_key][batch_key]["time"]
                         enhanced_time = video_results["enhanced"][proc_key][batch_key]["time"]
-                        
-                        # Skip configurations where any implementation timed out
-                        if (original_time == float('inf') or parallel_time == float('inf') or
-                            optimized_time == float('inf') or enhanced_time == float('inf')):
-                            print(f"Skipping configuration P{process_count},B{batch_size} due to timeout")
-                            continue
                         
                         # Get speedups
                         parallel_speedup = video_results["parallel"][proc_key][batch_key].get("speedup", 0)
@@ -320,7 +303,7 @@ def plot_results(results, output_dir):
         plt.grid(True, axis='y')
         plt.tight_layout()
         
-        plt.savefig(os.path.join(plots_dir, f"{video_name}_all_implementations_comparison.png"))
+        plt.savefig(f"test_output/plots/{video_name}_all_implementations_comparison.png")
         
         # Create speedup comparison plot
         plt.figure(figsize=(14, 8))
@@ -339,7 +322,7 @@ def plot_results(results, output_dir):
         plt.grid(True, axis='y')
         plt.tight_layout()
         
-        plt.savefig(os.path.join(plots_dir, f"{video_name}_speedup_comparison.png"))
+        plt.savefig(f"test_output/plots/{video_name}_speedup_comparison.png")
         
         # Create a heatmap of speedups
         plt.figure(figsize=(12, 8))
@@ -367,12 +350,9 @@ def plot_results(results, output_dir):
         plt.ylabel('Number of Processes')
         plt.title(f'Enhanced Implementation Speedup Heatmap for {video_name}')
         
-        plt.savefig(os.path.join(plots_dir, f"{video_name}_enhanced_speedup_heatmap.png"))
+        plt.savefig(f"test_output/plots/{video_name}_enhanced_speedup_heatmap.png")
         
-        # Create a bar chart comparing the best configuration for each implementation
-        plt.figure(figsize=(12, 8))
-        
-        # Find best configuration for each implementation
+        # Find best configurations for each implementation
         best_configs = {}
         for implementation in ['original', 'parallel', 'optimized', 'enhanced']:
             best_time = float('inf')
@@ -393,6 +373,8 @@ def plot_results(results, output_dir):
             }
         
         # Create a comparison bar chart for the best configurations
+        plt.figure(figsize=(12, 8))
+        
         labels = ['Original', 'Parallel', 'Optimized', 'Enhanced']
         best_times = [best_configs[impl]['time'] for impl in ['original', 'parallel', 'optimized', 'enhanced']]
         best_configs_text = [f"P={best_configs[impl]['config'][0]}, B={best_configs[impl]['config'][1]}" 
@@ -423,105 +405,51 @@ def plot_results(results, output_dir):
                             ha='center')
         
         plt.tight_layout()
-        plt.savefig(os.path.join(plots_dir, f"{video_name}_best_configs_comparison.png"))
-        
-        # Create a line chart showing execution time vs process count for each implementation
-        plt.figure(figsize=(14, 8))
-        
-        # Group data by process count and batch size
-        process_data = {}
-        for p in set(process_counts):
-            process_data[p] = {
-                'original': [],
-                'parallel': [],
-                'optimized': [],
-                'enhanced': []
-            }
-        
-        for i, (p, b) in enumerate(zip(process_counts, batch_sizes)):
-            process_data[p]['original'].append(original_times[i])
-            process_data[p]['parallel'].append(parallel_times[i])
-            process_data[p]['optimized'].append(optimized_times[i])
-            process_data[p]['enhanced'].append(enhanced_times[i])
-        
-        # Calculate average time for each process count
-        process_counts_unique = sorted(set(process_counts))
-        original_avg = [np.mean(process_data[p]['original']) for p in process_counts_unique]
-        parallel_avg = [np.mean(process_data[p]['parallel']) for p in process_counts_unique]
-        optimized_avg = [np.mean(process_data[p]['optimized']) for p in process_counts_unique]
-        enhanced_avg = [np.mean(process_data[p]['enhanced']) for p in process_counts_unique]
-        
-        # Plot average times
-        plt.plot(process_counts_unique, original_avg, 'o-', label='Original', linewidth=2)
-        plt.plot(process_counts_unique, parallel_avg, 's-', label='Parallel', linewidth=2)
-        plt.plot(process_counts_unique, optimized_avg, '^-', label='Optimized', linewidth=2)
-        plt.plot(process_counts_unique, enhanced_avg, 'D-', label='Enhanced', linewidth=2)
-        
-        plt.xlabel('Number of Processes')
-        plt.ylabel('Average Execution Time (seconds)')
-        plt.title(f'Execution Time vs Process Count for {video_name}')
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        
-        plt.savefig(os.path.join(plots_dir, f"{video_name}_time_vs_processes.png"))
-        
-        # Create a line chart showing execution time vs batch size for each implementation
-        plt.figure(figsize=(14, 8))
-        
-        # Group data by batch size
-        batch_data = {}
-        for b in set(batch_sizes):
-            batch_data[b] = {
-                'original': [],
-                'parallel': [],
-                'optimized': [],
-                'enhanced': []
-            }
-        
-        for i, (p, b) in enumerate(zip(process_counts, batch_sizes)):
-            batch_data[b]['original'].append(original_times[i])
-            batch_data[b]['parallel'].append(parallel_times[i])
-            batch_data[b]['optimized'].append(optimized_times[i])
-            batch_data[b]['enhanced'].append(enhanced_times[i])
-        
-        # Calculate average time for each batch size
-        batch_sizes_unique = sorted(set(batch_sizes))
-        original_avg = [np.mean(batch_data[b]['original']) for b in batch_sizes_unique]
-        parallel_avg = [np.mean(batch_data[b]['parallel']) for b in batch_sizes_unique]
-        optimized_avg = [np.mean(batch_data[b]['optimized']) for b in batch_sizes_unique]
-        enhanced_avg = [np.mean(batch_data[b]['enhanced']) for b in batch_sizes_unique]
-        
-        # Plot average times
-        plt.plot(batch_sizes_unique, original_avg, 'o-', label='Original', linewidth=2)
-        plt.plot(batch_sizes_unique, parallel_avg, 's-', label='Parallel', linewidth=2)
-        plt.plot(batch_sizes_unique, optimized_avg, '^-', label='Optimized', linewidth=2)
-        plt.plot(batch_sizes_unique, enhanced_avg, 'D-', label='Enhanced', linewidth=2)
-        
-        plt.xlabel('Batch Size')
-        plt.ylabel('Average Execution Time (seconds)')
-        plt.title(f'Execution Time vs Batch Size for {video_name}')
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        
-        plt.savefig(os.path.join(plots_dir, f"{video_name}_time_vs_batch_size.png"))
+        plt.savefig(f"test_output/plots/{video_name}_best_configs_comparison.png")
 
-def print_summary(results, output_dir):
-    """
-    Print a summary of the results and save it to a file.
+def main():
+    # Parse arguments
+    parser = argparse.ArgumentParser(description="Compare all implementations including enhanced")
+    parser.add_argument("--skip-video-creation", action="store_true", help="Skip test video creation")
+    args = parser.parse_args()
     
-    Args:
-        results (dict): Results of the comparison
-        output_dir (str): Directory to save the summary
-    """
-    summary = []
-    summary.append("# Implementation Comparison Summary")
-    summary.append("")
+    # Create test videos if needed
+    if not args.skip_video_creation:
+        print("Creating test videos...")
+        os.makedirs("test_videos", exist_ok=True)
+        subprocess.run(["python", "create_test_video.py"])
     
+    # Define test parameters
+    test_videos = [
+        "test_videos/small.mp4",
+        "test_videos/medium.mp4",
+        "test_videos/large.mp4"
+    ]
+    
+    # Get CPU count
+    cpu_count = multiprocessing.cpu_count()
+    print(f"Detected {cpu_count} CPU cores")
+    
+    # Define process counts to test
+    # Include the optimal 75% of cores that our enhanced implementation uses by default
+    process_counts = [max(2, cpu_count // 2), max(2, int(cpu_count * 0.75)), cpu_count]
+    process_counts = sorted(list(set(process_counts)))  # Remove duplicates
+    
+    # Define batch sizes to test
+    batch_sizes = [10, 20, 50]
+    
+    # Run comparison tests
+    print("\nComparing all implementations including enhanced...")
+    results = compare_implementations(test_videos, process_counts, batch_sizes)
+    
+    # Plot results
+    print("\nPlotting comparison results...")
+    plot_comparison_results(results)
+    
+    # Print summary
+    print("\nComparison Summary:")
     for video_name, video_results in results.items():
-        summary.append(f"## {video_name}")
-        summary.append("")
+        print(f"\n{video_name}:")
         
         # Find best configuration for each implementation
         for implementation in ['original', 'parallel', 'optimized', 'enhanced']:
@@ -542,10 +470,8 @@ def print_summary(results, output_dir):
                                 best_time = time_value
                                 best_config = (process_count, batch_size)
             
-            summary.append(f"### Best {implementation.capitalize()} Configuration")
-            summary.append(f"- Processes: {best_config[0]}")
-            summary.append(f"- Batch Size: {best_config[1]}")
-            summary.append(f"- Execution Time: {best_time:.2f} seconds")
+            print(f"  Best {implementation} configuration: {best_config[0]} processes, batch size {best_config[1]}")
+            print(f"  Best {implementation} time: {best_time:.2f} seconds")
             
             # Calculate speedup compared to original (for non-original implementations)
             if implementation != 'original':
@@ -558,10 +484,10 @@ def print_summary(results, output_dir):
                             best_original_time = time_value
                 
                 speedup = best_original_time / best_time if best_time > 0 else 0
-                summary.append(f"- Speedup over best original: {speedup:.2f}x")
-                summary.append(f"- Time reduction: {best_original_time - best_time:.2f} seconds ({(best_original_time - best_time)/best_original_time*100:.1f}%)")
+                print(f"  Speedup over best original: {speedup:.2f}x")
+                print(f"  Time reduction: {best_original_time - best_time:.2f} seconds ({(best_original_time - best_time)/best_original_time*100:.1f}%)")
             
-            summary.append("")
+            print("")
         
         # Compare enhanced vs optimized
         best_optimized_time = float('inf')
@@ -579,53 +505,11 @@ def print_summary(results, output_dir):
                 if time_value < best_enhanced_time:
                     best_enhanced_time = time_value
         
-        improvement = best_optimized_time / best_enhanced_time if best_enhanced_time > 0 else 0
-        summary.append(f"### Enhanced vs Optimized")
-        summary.append(f"- Enhanced vs Optimized improvement: {improvement:.2f}x")
-        summary.append(f"- Time difference: {best_optimized_time - best_enhanced_time:.2f} seconds ({(best_optimized_time - best_enhanced_time)/best_optimized_time*100:.1f}%)")
-        summary.append("")
+        enhanced_vs_optimized = best_optimized_time / best_enhanced_time if best_enhanced_time > 0 else 0
+        print(f"  Enhanced vs Optimized speedup: {enhanced_vs_optimized:.2f}x")
+        print(f"  Time reduction: {best_optimized_time - best_enhanced_time:.2f} seconds ({(best_optimized_time - best_enhanced_time)/best_optimized_time*100:.1f}%)")
     
-    # Print summary
-    for line in summary:
-        print(line)
-    
-    # Save summary to file
-    with open(os.path.join(output_dir, "comparison_summary.md"), "w") as f:
-        f.write("\n".join(summary))
-
-def main():
-    # Input video
-    input_video = "input_short.mp4"
-    
-    # Output directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = f"custom_comparison_{timestamp}"
-    
-    # Get CPU count
-    cpu_count = multiprocessing.cpu_count()
-    print(f"Detected {cpu_count} CPU cores")
-    
-    # Define process counts to test
-    # Include the optimal 75% of cores that the enhanced implementation uses by default
-    process_counts = [max(2, cpu_count // 2), max(2, int(cpu_count * 0.75)), cpu_count]
-    process_counts = sorted(list(set(process_counts)))  # Remove duplicates
-    
-    # Define batch sizes to test - use smaller batch sizes for this test
-    batch_sizes = [5, 10, 20]
-    
-    # Run comparison
-    print(f"\nComparing all implementations on {input_video}...")
-    results = run_comparison(input_video, output_dir, process_counts, batch_sizes)
-    
-    # Plot results
-    print("\nPlotting comparison results...")
-    plot_results(results, output_dir)
-    
-    # Print summary
-    print("\nComparison Summary:")
-    print_summary(results, output_dir)
-    
-    print(f"\nResults saved to {output_dir} directory")
+    print("\nDetailed results and plots saved to test_output directory")
 
 if __name__ == "__main__":
     main()

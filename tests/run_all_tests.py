@@ -427,7 +427,7 @@ def main():
     
     # Step 2: Install test dependencies
     print("\n=== Installing Test Dependencies ===")
-    if run_command(["pip", "install", "-r", "test_requirements.txt"], "Installing Test Dependencies") == 0:
+    if run_command(["pip", "install", "-r", "../test_requirements.txt"], "Installing Test Dependencies") == 0:
         print("✅ Test dependencies installed successfully")
     else:
         print("❌ Failed to install test dependencies")
@@ -471,9 +471,9 @@ def main():
         
         # Test with sequential processing
         if run_command([
-            "python", "monitor_resources.py",
-            "--input", "test_videos/medium.mp4",
-            "--output", "test_output/resources/sequential.mp4",
+            "python", "../src/utils/monitor_resources.py",
+            "--input", "../test_videos/medium.mp4",
+            "--output", "../test_output/resources/sequential.mp4",
             "--processes", "1",
             "--batch-size", "1"
         ], "Monitoring Sequential Processing") == 0:
@@ -482,9 +482,9 @@ def main():
         # Test with parallel processing (half CPU cores)
         half_cores = max(1, cpu_count // 2)
         if run_command([
-            "python", "monitor_resources.py",
-            "--input", "test_videos/medium.mp4",
-            "--output", f"test_output/resources/half_cores_p{half_cores}.mp4",
+            "python", "../src/utils/monitor_resources.py",
+            "--input", "../test_videos/medium.mp4",
+            "--output", f"../test_output/resources/half_cores_p{half_cores}.mp4",
             "--processes", str(half_cores),
             "--batch-size", "10"
         ], f"Monitoring Parallel Processing ({half_cores} cores)") == 0:
@@ -492,9 +492,9 @@ def main():
         
         # Test with parallel processing (all CPU cores)
         if run_command([
-            "python", "monitor_resources.py",
-            "--input", "test_videos/medium.mp4",
-            "--output", f"test_output/resources/all_cores_p{cpu_count}.mp4",
+            "python", "../src/utils/monitor_resources.py",
+            "--input", "../test_videos/medium.mp4",
+            "--output", f"../test_output/resources/all_cores_p{cpu_count}.mp4",
             "--processes", str(cpu_count),
             "--batch-size", "20"
         ], f"Monitoring Parallel Processing ({cpu_count} cores)") == 0:
@@ -505,10 +505,10 @@ def main():
     
     # Step 6: Generate report
     print("\n=== Generating Test Report ===")
-    generate_report(test_results, "test_output/report/parallelism_test_report.html")
+    generate_report(test_results, "../test_output/report/parallelism_test_report.html")
     
     print("\n=== All Tests Completed ===")
-    print(f"Report available at: test_output/report/parallelism_test_report.html")
+    print(f"Report available at: ../test_output/report/parallelism_test_report.html")
 
 if __name__ == "__main__":
     main()

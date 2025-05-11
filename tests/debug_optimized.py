@@ -8,6 +8,9 @@ from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import traceback
 
+# Add the project root to the path so we can import our modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 def convert_frame_to_ascii(frame, width, height):
     """Simplified ASCII conversion for debugging"""
     # Resize frame to match target dimensions
@@ -181,7 +184,7 @@ def main():
         sys.stdout.flush()
     
     # Extract frames from video
-    input_video = "input_short.mp4"
+    input_video = "test_videos/small.mp4"  # Use a small test video for debugging
     max_frames = 50  # Limit to 50 frames for testing
     
     try:

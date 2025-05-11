@@ -1,7 +1,7 @@
 import os
 import time
 import sys
-from simple_processor import process_video_simple
+from src.processors.simple_processor import SimpleProcessor
 
 def main():
     # Input and output paths
@@ -24,16 +24,13 @@ def main():
     
     try:
         # Process video using simple processor
-        process_video_simple(
-            input_path=input_video,
+        processor = SimpleProcessor()
+        processor.process_video(
+            video_path=input_video,
             output_path=output_video,
             width=120,
             height=60,
-            processes=processes,
-            batch_size=batch_size,
-            font_size=12,
-            fps=30,
-            temp_dir="./temp_simple"
+            fps_target=30
         )
         
         # Record end time

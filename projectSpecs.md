@@ -31,45 +31,120 @@ This project creates a Python 3.10 application specifically designed for Windows
 ## 3. Project Structure
 
 ```
-ascii_video_converter/
-│
-├── main.py                  # Entry point for the application
-├── video_processor.py       # Video processing and ffmpeg operations
-├── ascii_converter.py       # ASCII conversion logic
-├── character_mapper.py      # Maps pixel values to Japanese characters
-├── renderer.py              # Renders and saves the final output
-├── utils.py                 # Utility functions
-├── requirements.txt         # Project dependencies
-└── README.md                # Project documentation
+VideoToASCII/
+├── src/
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── video_processor.py    # Video processing and ffmpeg operations
+│   │   ├── ascii_converter.py    # ASCII conversion logic
+│   │   ├── character_mapper.py   # Maps pixel values to Japanese characters
+│   │   └── renderer.py           # Renders and saves the final output
+│   ├── processors/
+│   │   ├── __init__.py
+│   │   ├── simple_processor.py   # Basic sequential implementation
+│   │   ├── optimized_processor.py # Performance-optimized implementation
+│   │   ├── parallel_processor.py # Pipeline parallelism implementation
+│   │   └── enhanced_parallel_processor.py # Advanced parallel implementation
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── helpers.py            # Utility functions
+│   └── gui/
+│       ├── __init__.py
+│       └── gui.py                # Graphical user interface
+├── tests/
+│   └── __init__.py
+├── main.py                       # Central entry point for the application
+├── requirements.txt              # Project dependencies
+└── README.md                     # Project documentation
 ```
 
 ## 4. Detailed Component Design
 
 ### 4.1 Command-line Interface (main.py)
 
-The main entry point will parse command-line arguments and orchestrate the conversion process.
+The main entry point parses command-line arguments and provides a unified interface to access all the different implementations.
 
 ```python
 import argparse
 import os
 import sys
-from video_processor import VideoProcessor
-from ascii_converter import ASCIIConverter
-from renderer import Renderer
-from utils import check_ffmpeg_installed, create_directory_if_not_exists
+import time
+import tkinter as tk
+
+# Add the current directory to the path so we can import our modules
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from src.utils.helpers import check_ffmpeg_installed, create_directory_if_not_exists
+from src.processors.simple_processor import SimpleProcessor
+from src.processors.parallel_processor import process_video_parallel
+from src.processors.enhanced_parallel_processor import process_video_enhanced
+from src.processors.optimized_processor import process_video_optimized
+from src.gui.gui import VideoToASCIIGUI
+
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Convert video to Japanese ASCII art')
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Convert video to ASCII art with various processing options',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    
+    # Input and output paths
     parser.add_argument('input_path', type=str, help='Path to input video file')
-    parser.add_argument('output_path', type=str, help='Path to output video file')
-    parser.add_argument('--width', type=int, default=120, help='Width of ASCII output in characters')
-    parser.add_argument('--height', type=int, default=60, help='Height of ASCII output in characters')
-    parser.add_argument('--fps', type=int, default=30, help='Frames per second of output video')
-    parser.add_argument('--font-size', type=int, default=12, help='Font size for ASCII characters')
-    parser.add_argument('--temp-dir', type=str, default='.\\temp', help='Directory for temporary files')
+    parser.add_argument('output_path', type=str, nargs='?', default=None,
+                        help='Path to output video file (if not provided, display in terminal)')
+    
+    # ASCII dimensions
+    parser.add_argument('--width', '-w', type=int, default=120,
+                        help='Width of ASCII output in characters')
+    parser.add_argument('--height', '-ht', type=int, default=60,
+                        help='Height of ASCII output in characters')
+    
+    # Processing options
+    parser.add_argument('--fps', '-f', type=int, default=None,
+                        help='Frames per second of output video (defaults to input video FPS)')
+    parser.add_argument('--font-size', '-fs', type=int, default=12,
+                        help='Font size for ASCII characters')
+    parser.add_argument('--temp-dir', '-t', type=str, default='./temp',
+                        help='Directory for temporary files')
+    parser.add_argument('--processes', '-p', type=int, default=None,
+                        help='Number of processes to use (default: number of CPU cores)')
+    parser.add_argument('--batch-size', '-b', type=int, default=10,
+                        help='Number of frames to process in each batch')
+    
+    # Implementation selection
+    parser.add_argument('--implementation', '-i', type=str, default='optimized',
+                        choices=['simple', 'parallel', 'enhanced', 'optimized'],
+                        help='Processing implementation to use')
+    
+    # Scale factor
+    parser.add_argument('--scale', '-s', type=float, default=1.0,
+                        help='Scale factor for output resolution (e.g., 0.5 for half size, 2.0 for double size)')
+    
+    # GUI mode
+    parser.add_argument('--gui', '-g', action='store_true',
+                        help='Launch the graphical user interface')
+    
+    # Terminal mode options
+    parser.add_argument('--invert', '-inv', action='store_true',
+                        help='Invert brightness (only for terminal output)')
+    parser.add_argument('--colored', '-c', action='store_true',
+                        help='Use colored ASCII (only for terminal output)')
+    
     return parser.parse_args()
 
+
 def main():
+    """Main entry point for the application."""
+    args = parse_arguments()
+    
+    # Launch GUI if requested
+    if args.gui:
+        root = tk.Tk()
+        app = VideoToASCIIGUI(root)
+        root.mainloop()
+        return
+    
     # Check for ffmpeg installation first
     if not check_ffmpeg_installed():
         print("Error: ffmpeg is not installed or not accessible in PATH.")
@@ -77,58 +152,85 @@ def main():
         print("Make sure to add it to your PATH environment variable.")
         sys.exit(1)
     
-    args = parse_arguments()
-    
     # Convert backslashes to forward slashes for consistent path handling
     args.input_path = args.input_path.replace('\\', '/')
-    args.output_path = args.output_path.replace('\\', '/')
+    if args.output_path:
+        args.output_path = args.output_path.replace('\\', '/')
     args.temp_dir = args.temp_dir.replace('\\', '/')
     
     # Create temporary directory if it doesn't exist
-    create_directory_if_not_exists(args.temp_dir)
+    if args.implementation != 'simple' or args.output_path:
+        create_directory_if_not_exists(args.temp_dir)
+    
+    # Process video using the selected implementation
+    start_time = time.time()
     
     try:
-        # Initialize components
-        video_processor = VideoProcessor()
-        ascii_converter = ASCIIConverter()
-        renderer = Renderer(font_size=args.font_size, fps=args.fps)
+        if args.implementation == 'simple':
+            # Simple implementation (good for terminal output)
+            processor = SimpleProcessor()
+            processor.process_video(
+                args.input_path,
+                args.output_path,
+                args.width,
+                args.height,
+                args.fps,
+                args.invert,
+                args.colored
+            )
         
-        # Process video
-        print(f"Processing video: {args.input_path}")
-        downscaled_video = video_processor.downscale_video(
-            args.input_path, 
-            os.path.join(args.temp_dir, "downscaled.mp4"),
-            args.width,
-            args.height
-        )
+        elif args.implementation == 'parallel':
+            # Parallel implementation (pipeline parallelism)
+            process_video_parallel(
+                input_path=args.input_path,
+                output_path=args.output_path,
+                width=args.width,
+                height=args.height,
+                processes=args.processes,
+                batch_size=args.batch_size,
+                font_size=args.font_size,
+                fps=args.fps,
+                temp_dir=args.temp_dir
+            )
         
-        # Convert to ASCII frames
-        print("Converting to ASCII art...")
-        ascii_frames = ascii_converter.convert_video_to_ascii(
-            downscaled_video,
-            args.width,
-            args.height
-        )
+        elif args.implementation == 'enhanced':
+            # Enhanced parallel implementation
+            process_video_enhanced(
+                input_path=args.input_path,
+                output_path=args.output_path,
+                width=args.width,
+                height=args.height,
+                processes=args.processes,
+                batch_size=args.batch_size,
+                font_size=args.font_size,
+                fps=args.fps,
+                temp_dir=args.temp_dir,
+                scale=args.scale
+            )
         
-        # Render and save output
-        print(f"Rendering output to: {args.output_path}")
-        renderer.render_ascii_frames(ascii_frames, args.output_path)
+        else:  # 'optimized' (default)
+            # Optimized implementation
+            process_video_optimized(
+                input_path=args.input_path,
+                output_path=args.output_path,
+                width=args.width,
+                height=args.height,
+                processes=args.processes,
+                batch_size=args.batch_size,
+                font_size=args.font_size,
+                fps=args.fps,
+                temp_dir=args.temp_dir,
+                scale=args.scale
+            )
         
-        print("Conversion complete!")
+        # Print final stats
+        end_time = time.time()
+        print(f"Total execution time: {end_time - start_time:.2f} seconds")
     
     except Exception as e:
         print(f"Error: {str(e)}")
         sys.exit(1)
-    
-    finally:
-        # Clean up temporary files
-        if os.path.exists(args.temp_dir):
-            import shutil
-            try:
-                shutil.rmtree(args.temp_dir)
-            except PermissionError:
-                print(f"Warning: Could not remove temporary directory: {args.temp_dir}")
-                print("You may want to delete it manually.")
+
 
 if __name__ == "__main__":
     main()
@@ -642,25 +744,50 @@ tqdm==4.65.0
 
 Open Command Prompt in the project directory and run:
 
-```
+```bash
+# Basic usage with default (optimized) implementation
 python main.py input_video.mp4 output_video.mp4
 ```
 
-### 6.2 Advanced Options
+### 6.2 Implementation Selection
 
+```bash
+# Select a specific implementation
+python main.py input_video.mp4 --implementation simple
+python main.py input_video.mp4 output_video.mp4 --implementation parallel
+python main.py input_video.mp4 output_video.mp4 --implementation enhanced
 ```
-python main.py input_video.mp4 output_video.mp4 --width 160 --height 90 --fps 30 --font-size 14 --temp-dir .\temp_folder
+
+### 6.3 Advanced Options
+
+```bash
+# Customize output
+python main.py input_video.mp4 output_video.mp4 --width 160 --height 90 --fps 30 --font-size 14 --temp-dir ./temp_folder --processes 4 --batch-size 20
 ```
 
-### 6.3 Parameters
+### 6.4 GUI Mode
 
-- `input_path`: Path to the input video file (required)
-- `output_path`: Path to save the output video (required)
-- `--width`: Width of the ASCII output in characters (default: 120)
-- `--height`: Height of the ASCII output in characters (default: 60)
-- `--fps`: Frames per second of the output video (default: 30)
-- `--font-size`: Font size for ASCII characters (default: 12)
-- `--temp-dir`: Directory for temporary files (default: .\temp)
+```bash
+# Launch the GUI
+python main.py --gui
+```
+
+### 6.5 Parameters
+
+- `input_path`: Path to the input video file (required, except in GUI mode)
+- `output_path`: Path to save the output video (optional, if not provided and not in GUI mode, display in terminal)
+- `--width`, `-w`: Width of the ASCII output in characters (default: 120)
+- `--height`, `-ht`: Height of the ASCII output in characters (default: 60)
+- `--fps`, `-f`: Frames per second of the output video (defaults to input video FPS)
+- `--font-size`, `-fs`: Font size for ASCII characters (default: 12)
+- `--temp-dir`, `-t`: Directory for temporary files (default: ./temp)
+- `--processes`, `-p`: Number of processes to use for parallel processing (default: number of CPU cores)
+- `--batch-size`, `-b`: Number of frames to process in each batch (default: 10)
+- `--implementation`, `-i`: Processing implementation to use (choices: simple, parallel, enhanced, optimized; default: optimized)
+- `--scale`, `-s`: Scale factor for output resolution (default: 1.0)
+- `--gui`, `-g`: Launch the graphical user interface
+- `--invert`, `-inv`: Invert brightness (only for terminal output)
+- `--colored`, `-c`: Use colored ASCII (only for terminal output)
 
 ## 7. Windows-Specific Error Handling
 
@@ -682,22 +809,37 @@ The application includes comprehensive error handling for Windows-specific issue
 ## 9. Testing Instructions for Windows
 
 1. **Basic Functionality Test**:
-   ```
+   ```bash
    python main.py test_video.mp4 output.mp4 --width 80 --height 40
    ```
 
 2. **Font Test** (to verify Japanese characters display correctly):
-   ```
+   ```bash
    python main.py test_video.mp4 font_test.mp4 --font-size 18
    ```
 
-3. **Performance Test**:
-   ```
-   python main.py large_test_video.mp4 performance_test.mp4 --width 200 --height 100
+3. **Performance Test with Different Implementations**:
+   ```bash
+   # Test simple implementation
+   python main.py large_test_video.mp4 simple_test.mp4 --implementation simple --width 200 --height 100
+   
+   # Test parallel implementation
+   python main.py large_test_video.mp4 parallel_test.mp4 --implementation parallel --width 200 --height 100
+   
+   # Test enhanced implementation
+   python main.py large_test_video.mp4 enhanced_test.mp4 --implementation enhanced --width 200 --height 100
+   
+   # Test optimized implementation (default)
+   python main.py large_test_video.mp4 optimized_test.mp4 --width 200 --height 100
    ```
 
-4. **Windows Path Test** (testing paths with spaces and backslashes):
+4. **GUI Test**:
+   ```bash
+   python main.py --gui
    ```
+
+5. **Windows Path Test** (testing paths with spaces and backslashes):
+   ```bash
    python main.py "C:\My Videos\input video.mp4" "C:\My Videos\output video.mp4"
    ```
 

@@ -8,10 +8,10 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from video_processor import VideoProcessor
-from ascii_converter import ASCIIConverter
-from renderer import Renderer, render_ascii_frame_to_image_static
-from utils import create_directory_if_not_exists
+from ..core.video_processor import VideoProcessor
+from ..core.ascii_converter import ASCIIConverter
+from ..core.renderer import Renderer, render_ascii_frame_to_image_static
+from ..utils.helpers import create_directory_if_not_exists
 
 class ParallelProcessor:
     """

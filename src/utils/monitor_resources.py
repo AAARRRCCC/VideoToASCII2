@@ -131,7 +131,7 @@ def main():
     
     # Prepare command
     command = [
-        "python", "main.py",
+        "python", "../main.py",
         args.input, args.output,
         "--batch-size", str(args.batch_size)
     ]
@@ -152,19 +152,19 @@ def main():
     data = monitor_resources(
         command, 
         interval=args.interval,
-        output_dir=f"test_output/resources"
+        output_dir=f"../test_output/resources"
     )
     
     # Plot resource usage
     title = f"Resource Usage (Processes: {args.processes or 'Auto'}, Batch Size: {args.batch_size})"
-    plot_path = f"test_output/resources/{base_name}_resources.png"
+    plot_path = f"../test_output/resources/{base_name}_resources.png"
     plot_resource_usage(data, title, plot_path)
     
     print(f"Resource usage plot saved to: {plot_path}")
     
     # Save raw data
     import json
-    data_path = f"test_output/resources/{base_name}_data.json"
+    data_path = f"../test_output/resources/{base_name}_data.json"
     with open(data_path, 'w') as f:
         # Convert numpy arrays to lists for JSON serialization
         serializable_data = {

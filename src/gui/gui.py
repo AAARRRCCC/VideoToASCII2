@@ -6,7 +6,7 @@ import threading
 import subprocess
 import multiprocessing
 import cv2
-from utils import check_ffmpeg_installed
+from ..utils.utils import check_ffmpeg_installed
 import re
 
 class VideoToASCIIGUI:
@@ -367,7 +367,7 @@ class VideoToASCIIGUI:
         # rather than passing the scale factor directly
         cmd = [
             sys.executable,
-            "main.py",
+            "../main.py",
             self.input_path.get(),
             self.output_path.get(),
             "--width", str(self.width.get()),
