@@ -20,6 +20,7 @@ def parse_arguments():
     parser.add_argument('--batch-size', type=int, default=10, help='Number of frames to process in each batch (default: 10)')
     parser.add_argument('--compare', action='store_true', help='Create a side-by-side comparison video of the original and ASCII versions')
     parser.add_argument('--mode', type=str, choices=['sequential', 'parallel'], default='parallel', help='Processing mode: "sequential" or "parallel" (default: "parallel")')
+    parser.add_argument('--profile', action='store_true', help='Enable performance profiling')
     return parser.parse_args()
 
 def main():
@@ -44,6 +45,12 @@ def main():
     output_dir = os.path.dirname(os.path.abspath(args.output_path))
     create_directory_if_not_exists(output_dir)
     
+    if args.profile:
+        import cProfile
+        import pstats
+        profiler = cProfile.Profile()
+        profiler.enable()
+
     try:
         # Initialize components based on processing mode
         if args.mode == 'sequential':
@@ -69,6 +76,14 @@ def main():
         )
         end_time = time.time()
         print(f"Downscaling video took: {end_time - start_time:.2f} seconds")
+
+        if args.profile:
+            profiler.disable()
+            stats = pstats.Stats(profiler).sort_stats('cumulative')
+            print("\n--- Downscaling Profiling Results ---")
+            stats.print_stats()
+            print("-------------------------------------")
+            profiler.enable()
         
         # Convert to ASCII frames
         print("Converting to ASCII art...")
@@ -81,6 +96,14 @@ def main():
         )
         end_time = time.time()
         print(f"Converting to ASCII art took: {end_time - start_time:.2f} seconds")
+
+        if args.profile:
+            profiler.disable()
+            stats = pstats.Stats(profiler).sort_stats('cumulative')
+            print("\n--- ASCII Conversion Profiling Results ---")
+            stats.print_stats()
+            print("------------------------------------------")
+            profiler.enable()
         
         # Render and save output
         print(f"Rendering output to: {args.output_path}")
@@ -93,6 +116,14 @@ def main():
         )
         end_time = time.time()
         print(f"Rendering output took: {end_time - start_time:.2f} seconds")
+
+        if args.profile:
+            profiler.disable()
+            stats = pstats.Stats(profiler).sort_stats('cumulative')
+            print("\n--- Rendering Profiling Results ---")
+            stats.print_stats()
+            print("-----------------------------------")
+            profiler.enable()
         
         # If compare flag is set, create side-by-side comparison video
         if args.compare:
@@ -106,14 +137,29 @@ def main():
             )
             end_time = time.time()
             print(f"Creating comparison video took: {end_time - start_time:.2f} seconds")
+
+            if args.profile:
+                profiler.disable()
+                stats = pstats.Stats(profiler).sort_stats('cumulative')
+                print("\n--- Comparison Video Profiling Results ---")
+                stats.print_stats()
+                print("------------------------------------------")
+                profiler.enable()
         
         print("Conversion complete!")
     
     except Exception as e:
         print(f"Error: {str(e)}")
-        sys.exit(1)
-    
+        sys.exit(1) # Ensure exit on error even with profiling
+
     finally:
+        if args.profile:
+            profiler.disable()
+            stats = pstats.Stats(profiler).sort_stats('cumulative')
+            print("\n--- Profiling Results ---")
+            stats.print_stats()
+            print("-------------------------")
+
         # Clean up temporary files
         if os.path.exists(args.temp_dir):
             import shutil

@@ -269,6 +269,33 @@ class TestVideoToASCII(unittest.TestCase):
                     # self.assertGreater(np.mean(similarities), 0.9, "Expected high frame similarity")
 
         plot_results(results, batch_sizes) # Plotting might not be suitable in this environment
+
+    def test_profiling(self):
+        """Test that the --profile flag runs without errors."""
+        print(f"\n=== Running Profiling Test ===")
+        test_video = "test_videos/small.mp4"
+        if not os.path.exists(test_video):
+            self.skipTest(f"Test video not found at {test_video}")
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = f"test_output/profiling_{timestamp}"
+        os.makedirs(output_dir, exist_ok=True)
+
+        ascii_output = os.path.join(output_dir, "ascii_output.mp4")
+
+        cmd = [
+            "python", "main.py",
+            test_video,
+            ascii_output,
+            "--profile"
+        ]
+
+        print(f"Running command: {' '.join(cmd)}")
+        result = self.run_command(cmd)
+
+        self.assertEqual(result.returncode, 0, f"Profiling test failed: {result.stderr}")
+        print("Profiling Test completed successfully!")
+
 def plot_results(results, batch_sizes):
     """Plots the performance test results."""
     plot_dir = "test_output/plots"
