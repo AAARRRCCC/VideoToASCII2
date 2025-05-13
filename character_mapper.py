@@ -31,7 +31,7 @@ class CharacterMapper:
         
         # Calculate brightness thresholds
         self.black_threshold = 30  # Pixels below this value will be represented by a black dot
-        self.brightness_levels = len(self.japanese_chars))
+        self.brightness_levels = len(self.japanese_chars)
     
         self.brightness_step = (255 - self.black_threshold) / self.brightness_levels
     
