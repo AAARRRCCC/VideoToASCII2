@@ -131,15 +131,7 @@ class ASCIIConverter:
             
             # Apply the mapping logic to each pixel in the row
             for pixel_value in row_pixels:
-                if pixel_value <= black_threshold:
-                    ascii_row.append(black_char)
-                else:
-                    adjusted_value = pixel_value - black_threshold
-                    char_index = min(
-                        int(adjusted_value / brightness_step),
-                        len(japanese_chars) - 1
-                    )
-                    ascii_row.append(japanese_chars[char_index])
+                ascii_row.append(self.character_mapper.map_pixel_to_character(pixel_value))
             
             ascii_frame.append(ascii_row)
         

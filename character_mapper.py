@@ -29,25 +29,35 @@ class CharacterMapper:
         # Use a black dot for the darkest pixels
         self.black_char = '・'
         
-        # Calculate brightness thresholds
+        # Define brightness thresholds
         self.black_threshold = 30  # Pixels below this value will be represented by a black dot
+        self.white_threshold = 220 # Pixels above this value will be represented by a white character
+        
+        # Use a white space for the brightest pixels
+        self.white_char = ' '
+        
+        # Calculate brightness levels and step for characters between thresholds
         self.brightness_levels = len(self.japanese_chars)
-    
-        self.brightness_step = (255 - self.black_threshold) / self.brightness_levels
+        self.brightness_range = self.white_threshold - self.black_threshold
+        self.brightness_step = self.brightness_range / self.brightness_levels
     
     def map_pixel_to_character(self, pixel_value):
         """
-        Map a pixel value (0-255) to a Japanese character.
+        Map a pixel value (0-255) to a Japanese character, considering black and white thresholds.
         
         Args:
             pixel_value (int): Grayscale pixel value (0-255)
             
         Returns:
-            str: Japanese character representing the pixel brightness
+            str: Character representing the pixel brightness
         """
-        # Black pixels get a dot
+        # Black pixels get the black character
         if pixel_value <= self.black_threshold:
             return self.black_char
+        
+        # White pixels get the white character
+        elif pixel_value >= self.white_threshold:
+            return self.white_char
         
         # Map other pixel values to Japanese characters
         adjusted_value = pixel_value - self.black_threshold
