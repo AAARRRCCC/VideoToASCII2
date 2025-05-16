@@ -229,6 +229,45 @@ class VideoProcessor:
         except subprocess.CalledProcessError as e:
             error_message = e.stderr.decode() if e.stderr else str(e)
             raise RuntimeError(f"Error creating comparison video: {error_message}")
-            
+
         return output_path
-        
+
+    def preprocess_to_bw(self, input_path, output_path):
+        """
+        Preprocess the input video to black and white using a specific FFmpeg filter chain.
+
+        Args:
+            input_path (str): Path to input video file
+            output_path (str): Path to save the preprocessed video
+
+        Returns:
+            str: Path to the preprocessed video
+        """
+        # Ensure input file exists
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input video file not found: {input_path}")
+
+        # The specified FFmpeg filter chain
+        # The specified FFmpeg filter chain - corrected quoting for Windows shell
+        # The specified FFmpeg filter chain - corrected quoting for Windows shell
+        filter_chain = "extractplanes=y,eq=contrast=1.8:gamma=0.8,histeq,scale=640:-1:flags=lanczos,lut=if(lt(val\,120)\,0\,255)"
+
+        # Create ffmpeg command with the filter chain
+        cmd = (
+            f'ffmpeg -i "{input_path}" '
+            f'-vf "{filter_chain}" '
+            f'-c:v libx264 -crf 23 -preset fast -threads 0 -y "{output_path}"'
+        )
+
+        print(f"Applying preprocessing filter: {filter_chain}")
+
+        # Execute ffmpeg command
+        try:
+            # Use shell=True for Windows command execution
+            process = subprocess.run(cmd, check=True, stderr=subprocess.PIPE, shell=True)
+            print(f"Preprocessing complete. Output saved to: {output_path}")
+        except subprocess.CalledProcessError as e:
+            error_message = e.stderr.decode() if e.stderr else str(e)
+            raise RuntimeError(f"Error during preprocessing: {error_message}")
+
+        return output_path

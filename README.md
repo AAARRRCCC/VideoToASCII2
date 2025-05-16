@@ -86,6 +86,7 @@ python main.py input_video.mp4 output_video.mp4 --width 160 --height 90 --fps 30
 - `--mode`: Processing mode. Choose between `sequential` and `parallel`. `parallel` is the default and recommended for performance on multi-core systems. (default: `parallel`)
 - `--scale`: Scaling factor for the resolution of the rendered ASCII output video. A scale of 2 will result in an output video with dimensions twice the calculated ASCII width and height. (default: 1)
 - `--profile`: Include this flag to enable performance profiling during the conversion process. Profiling results will be printed to the console.
+- `--prep-bw`: Include this flag to preprocess the input video by converting it to black and white before the main conversion process. This can potentially improve performance by reducing the processing load in subsequent steps.
 
 ## Examples
 

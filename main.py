@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import time
+import tempfile # Import tempfile for temporary file handling
 from video_processor import VideoProcessor
 from ascii_converter import ASCIIConverter
 from renderer import Renderer
@@ -22,6 +23,7 @@ def parse_arguments():
     parser.add_argument('--mode', type=str, choices=['sequential', 'parallel'], default='parallel', help='Processing mode: "sequential" or "parallel" (default: "parallel")')
     parser.add_argument('--scale', type=int, default=1, help='Scaling factor for ASCII render resolution (default: 1)')
     parser.add_argument('--profile', action='store_true', help='Enable performance profiling')
+    parser.add_argument('--prep-bw', action='store_true', help='Pre-grade + binarise video for silhouette ASCII')
     return parser.parse_args()
 
 def main():
@@ -66,6 +68,18 @@ def main():
             ascii_converter = ASCIIConverter(num_processes=args.processes)
             renderer = Renderer(font_size=args.font_size, fps=args.fps, num_processes=args.processes)
         
+        # Store original input path before potential preprocessing
+        original_input_path = args.input_path
+
+        # Apply preprocessing if --prep-bw flag is set
+        if args.prep_bw:
+            print("Applying black and white preprocessing...")
+            temp_bw_path = os.path.join(args.temp_dir, "preprocessed_bw.mp4")
+            video_processor.preprocess_to_bw(original_input_path, temp_bw_path)
+            # Update input path to the preprocessed file for the rest of the pipeline
+            args.input_path = temp_bw_path
+            print(f"Using preprocessed video as input: {args.input_path}")
+
         # Process video
         print(f"Processing video: {args.input_path}")
         start_time = time.time()
