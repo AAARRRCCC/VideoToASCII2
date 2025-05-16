@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video to Japanese ASCII Art Converter</title>
+  <script type="module" src="/main.js" defer></script>
+</head>
+
+<body>
+  <main class="container">
+    <h1>Video to Japanese ASCII Art Converter</h1>
+    <form id="ascii-form" class="ascii-form" autocomplete="off">
+      <div class="form-grid">
+        <div class="form-row">
+          <label for="input-path">Input Video</label>
+          <input type="file" id="input-path" accept="video/*" required />
+        </div>
+        <div class="form-row">
+          <label for="output-path">Output Path</label>
+          <input type="text" id="output-path" placeholder="output.mp4" required />
+        </div>
+        <div class="form-row">
+          <label for="width">Width</label>
+          <input type="number" id="width" min="1" max="500" value="120" />
+        </div>
+        <div class="form-row">
+          <label for="height">Height</label>
+          <input type="number" id="height" min="1" max="200" value="60" />
+        </div>
+        <div class="form-row">
+          <label for="fps">FPS</label>
+          <input type="number" id="fps" min="1" max="120" value="30" />
+        </div>
+        <div class="form-row">
+          <label for="font-size">Font Size</label>
+          <input type="number" id="font-size" min="6" max="48" value="12" />
+        </div>
+        <div class="form-row">
+          <label for="temp-dir">Temp Directory</label>
+          <input type="text" id="temp-dir" value="./temp" />
+        </div>
+        <div class="form-row">
+          <label for="processes">Processes</label>
+          <input type="number" id="processes" min="1" max="64" placeholder="Auto" />
+        </div>
+        <div class="form-row">
+          <label for="batch-size">Batch Size</label>
+          <input type="number" id="batch-size" min="1" max="100" value="10" />
+        </div>
+        <div class="form-row checkbox-row">
+          <input type="checkbox" id="compare" />
+          <label for="compare">Side-by-side Comparison</label>
+        </div>
+        <div class="form-row">
+          <label for="mode">Processing Mode</label>
+          <select id="mode">
+            <option value="parallel" selected>Parallel</option>
+            <option value="sequential">Sequential</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="scale">Scale</label>
+          <input type="number" id="scale" min="1" max="4" value="1" />
+        </div>
+        <div class="form-row checkbox-row">
+          <input type="checkbox" id="profile" />
+          <label for="profile">Enable Profiling</label>
+        </div>
+      </div>
+      <div class="form-row full-width">
+        <button type="submit" id="start-btn">Convert</button>
+      </div>
+    </form>
+    <div id="progress-container" class="progress-container" style="display:none;">
+      <div id="progress-bar" class="progress-bar"></div>
+      <span id="progress-text"></span>
+    </div>
+    <div id="output-area" class="output-area"></div>
+    <div id="error-area" class="error-area"></div>
+  </main>
+</body>
+
+</html>
